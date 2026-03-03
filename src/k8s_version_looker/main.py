@@ -62,6 +62,8 @@ def main() -> None:
                         help="Timeout for cluster queries in seconds (default: 5)")
     parser.add_argument("--include", help="Include only contexts matching these patterns (comma-separated globs)")
     parser.add_argument("--exclude", help="Exclude contexts matching these patterns (comma-separated globs)")
+    parser.add_argument("-d", "--detailed", action="store_true",
+                        help="Show detailed patch versions (default: group by minor version)")
     args = parser.parse_args()
 
     # Validate output file path if provided
@@ -93,17 +95,17 @@ def main() -> None:
     # Handle different output formats
     try:
         if args.output == "text":
-            display_text(versions)
+            display_text(versions, detailed=args.detailed)
         elif args.output == "html":
-            html_content = generate_html(versions, args.output_file)
+            html_content = generate_html(versions, args.output_file, detailed=args.detailed)
             if not args.output_file:
                 print(html_content)
         elif args.output == "markdown":
-            md_content = generate_markdown(versions, args.output_file)
+            md_content = generate_markdown(versions, args.output_file, detailed=args.detailed)
             if not args.output_file:
                 print(md_content)
         elif args.output == "json":
-            json_content = generate_json(versions, args.output_file)
+            json_content = generate_json(versions, args.output_file, detailed=args.detailed)
             if not args.output_file:
                 print(json_content)
     except KeyboardInterrupt:

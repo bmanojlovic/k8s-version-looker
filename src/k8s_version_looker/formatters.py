@@ -8,7 +8,7 @@ from typing import Dict, Optional
 from .models import ClusterInfo, group_nodes
 
 
-def generate_markdown(versions: Dict[str, ClusterInfo], output_file: Optional[str] = None) -> str:
+def generate_markdown(versions: Dict[str, ClusterInfo], output_file: Optional[str] = None, detailed: bool = True) -> str:
     """Generate a Markdown report of cluster versions."""
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -30,7 +30,7 @@ def generate_markdown(versions: Dict[str, ClusterInfo], output_file: Optional[st
             md_content += "No node information available.\n\n"
             continue
 
-        node_groups = group_nodes(cluster_info.nodes)
+        node_groups = group_nodes(cluster_info.nodes, detailed=detailed)
 
         md_content += f"### Node Information ({cluster_info.node_count} nodes)\n\n"
         md_content += "| Kubelet Version | Node Count | OS | Container Runtime |\n"
@@ -48,7 +48,7 @@ def generate_markdown(versions: Dict[str, ClusterInfo], output_file: Optional[st
     return md_content
 
 
-def generate_html(versions: Dict[str, ClusterInfo], output_file: Optional[str] = None) -> str:
+def generate_html(versions: Dict[str, ClusterInfo], output_file: Optional[str] = None, detailed: bool = True) -> str:
     """Generate an HTML report of cluster versions."""
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -138,7 +138,7 @@ def generate_html(versions: Dict[str, ClusterInfo], output_file: Optional[str] =
             html_content += "</div>"
             continue
 
-        node_groups = group_nodes(cluster_info.nodes)
+        node_groups = group_nodes(cluster_info.nodes, detailed=detailed)
 
         html_content += f'<h3>Node Information ({cluster_info.node_count} nodes)</h3>'
         html_content += """
@@ -172,13 +172,17 @@ def generate_html(versions: Dict[str, ClusterInfo], output_file: Optional[str] =
     return html_content
 
 
-def generate_json(versions: Dict[str, ClusterInfo], output_file: Optional[str] = None) -> str:
+def generate_json(versions: Dict[str, ClusterInfo], output_file: Optional[str] = None, detailed: bool = True) -> str:
     """Generate a JSON report of cluster versions."""
-    # Convert dataclasses to dictionaries
-    clusters_dict = {
-        context_name: asdict(cluster_info)
-        for context_name, cluster_info in versions.items()
-    }
+    # Convert dataclasses to dictionaries, applying grouping with detailed parameter
+    clusters_dict = {}
+    for context_name, cluster_info in versions.items():
+        cluster_dict = asdict(cluster_info)
+        # Re-group nodes with the detailed parameter
+        if cluster_info.nodes:
+            node_groups = group_nodes(cluster_info.nodes, detailed=detailed)
+            cluster_dict['node_groups'] = [asdict(group) for group in node_groups]
+        clusters_dict[context_name] = cluster_dict
 
     # Add timestamp to the output
     output = {
@@ -195,7 +199,7 @@ def generate_json(versions: Dict[str, ClusterInfo], output_file: Optional[str] =
     return json_content
 
 
-def display_text(versions: Dict[str, ClusterInfo]) -> None:
+def display_text(versions: Dict[str, ClusterInfo], detailed: bool = True) -> None:
     """Display cluster versions in text format to console."""
     if not versions:
         print("No cluster information available.")
@@ -210,7 +214,7 @@ def display_text(versions: Dict[str, ClusterInfo]) -> None:
             print("No node information available.")
             continue
 
-        node_groups = group_nodes(cluster_info.nodes)
+        node_groups = group_nodes(cluster_info.nodes, detailed=detailed)
 
         print(f"\nNode Information ({cluster_info.node_count} nodes):")
         for group in node_groups:

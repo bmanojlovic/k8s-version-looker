@@ -102,6 +102,81 @@ class TestGroupNodes(unittest.TestCase):
         groups = group_nodes([])
         self.assertEqual(len(groups), 0)
 
+    def test_group_by_minor_version(self):
+        """Test grouping nodes by minor version (summary mode)."""
+        nodes = [
+            NodeInfo("node-1", "v1.28.1", "Ubuntu 22.04", "containerd://1.7.0"),
+            NodeInfo("node-2", "v1.28.5", "Ubuntu 22.04", "containerd://1.7.0"),
+            NodeInfo("node-3", "v1.27.3", "Ubuntu 22.04", "containerd://1.7.0"),
+        ]
+        groups = group_nodes(nodes, detailed=False)
+        self.assertEqual(len(groups), 2)  # v1.28 and v1.27
+        
+        # Find the v1.28 group
+        v128_group = next(g for g in groups if g.kubelet_version == "v1.28")
+        self.assertEqual(v128_group.count, 2)  # node-1 and node-2
+
+    def test_group_by_os_summary(self):
+        """Test grouping OS versions together in summary mode."""
+        nodes = [
+            NodeInfo("node-1", "v1.29.0", "Bottlerocket OS 1.20.4 (aws-k8s-1.29)", "containerd://1.7.0"),
+            NodeInfo("node-2", "v1.30.0", "Bottlerocket OS 1.21.2 (aws-k8s-1.30)", "containerd://1.7.0"),
+            NodeInfo("node-3", "v1.31.0", "Bottlerocket OS 1.23.0 (aws-k8s-1.31)", "containerd://1.7.0"),
+        ]
+        groups = group_nodes(nodes, detailed=False)
+        # All should group together: same OS (Bottlerocket OS), same k8s minor (different), same runtime
+        # Actually they have different k8s versions so will be 3 groups
+        # But all should have "Bottlerocket OS" as os_image
+        for group in groups:
+            if "Bottlerocket" in group.os_image:
+                self.assertEqual(group.os_image, "Bottlerocket OS")
+
+    def test_windows_year_preserved(self):
+        """Test that Windows year versions are preserved in summary mode."""
+        nodes = [
+            NodeInfo("node-1", "v1.28.0", "Windows Server 2019 Datacenter", "containerd://1.7.0"),
+            NodeInfo("node-2", "v1.28.0", "Windows Server 2022 Datacenter", "containerd://1.7.0"),
+            NodeInfo("node-3", "v1.28.0", "Windows Server 2022 Datacenter 10.0.20348", "containerd://1.7.0"),
+        ]
+        groups = group_nodes(nodes, detailed=False)
+        # Should have 2 groups: 2019 and 2022 (node-2 and node-3 grouped)
+        self.assertEqual(len(groups), 2)
+        
+        # Check that years are preserved
+        os_images = {g.os_image for g in groups}
+        self.assertIn("Windows Server 2019 Datacenter", os_images)
+        self.assertIn("Windows Server 2022 Datacenter", os_images)
+
+    def test_container_runtime_minor_grouping(self):
+        """Test that container runtime versions group by major.minor in summary mode."""
+        nodes = [
+            NodeInfo("node-1", "v1.28.0", "Ubuntu 22.04", "containerd://1.7.0"),
+            NodeInfo("node-2", "v1.28.0", "Ubuntu 22.04", "containerd://1.7.5"),
+            NodeInfo("node-3", "v1.28.0", "Ubuntu 22.04", "containerd://1.6.8"),
+        ]
+        groups = group_nodes(nodes, detailed=False)
+        # Should have 2 groups: containerd 1.7 (node-1 and node-2) and 1.6 (node-3)
+        self.assertEqual(len(groups), 2)
+        
+        # Check runtime versions
+        runtimes = {g.container_runtime for g in groups}
+        self.assertIn("containerd://1.7", runtimes)
+        self.assertIn("containerd://1.6", runtimes)
+
+    def test_group_by_patch_version(self):
+        """Test grouping nodes by patch version (detailed mode)."""
+        nodes = [
+            NodeInfo("node-1", "v1.28.1", "Ubuntu 22.04", "containerd://1.7.0"),
+            NodeInfo("node-2", "v1.28.5", "Ubuntu 22.04", "containerd://1.7.0"),
+            NodeInfo("node-3", "v1.28.1", "Ubuntu 22.04", "containerd://1.7.0"),
+        ]
+        groups = group_nodes(nodes, detailed=True)
+        self.assertEqual(len(groups), 2)  # v1.28.1 and v1.28.5
+        
+        # Find the v1.28.1 group
+        v1281_group = next(g for g in groups if g.kubelet_version == "v1.28.1")
+        self.assertEqual(v1281_group.count, 2)  # node-1 and node-3
+
 
 if __name__ == "__main__":
     unittest.main()
