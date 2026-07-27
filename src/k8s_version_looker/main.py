@@ -12,21 +12,48 @@ from .formatters import generate_html, generate_json, generate_markdown, display
 __version__ = "0.1.0"
 
 
+class ProgressBar:
+    """Progress bar that stays pinned at the bottom. Errors print above it."""
+
+    def __init__(self):
+        self._last_bar = ""
+
+    def _render_bar(self, completed: int, total: int, context_name: str) -> str:
+        percentage = int((completed / total) * 100) if total > 0 else 0
+        bar_length = 30
+        filled_length = int(bar_length * completed / total) if total > 0 else 0
+        bar = '█' * filled_length + '░' * (bar_length - filled_length)
+        return f"Querying clusters: [{bar}] {completed}/{total} ({percentage}%) - {context_name}"
+
+    def update(self, completed: int, total: int, context_name: str) -> None:
+        """Redraw the progress bar on the current line."""
+        self._last_bar = self._render_bar(completed, total, context_name)
+        sys.stderr.write(f"\r\033[K{self._last_bar}")
+        sys.stderr.flush()
+
+        if completed == total:
+            sys.stderr.write("\n")
+            sys.stderr.flush()
+
+    def print_above(self, message: str) -> None:
+        """Print a message above the progress bar, then redraw it."""
+        # Clear current progress line, print message, redraw bar
+        sys.stderr.write(f"\r\033[K{message}\n{self._last_bar}")
+        sys.stderr.flush()
+
+
+# Module-level instance used by main()
+_progress = ProgressBar()
+
+
 def progress_indicator(completed: int, total: int, context_name: str) -> None:
     """Display progress as clusters are queried."""
-    # Clear line and show progress
-    percentage = int((completed / total) * 100) if total > 0 else 0
-    bar_length = 30
-    filled_length = int(bar_length * completed / total) if total > 0 else 0
-    bar = '█' * filled_length + '░' * (bar_length - filled_length)
+    _progress.update(completed, total, context_name)
 
-    sys.stderr.write(f"\r\033[KQuerying clusters: [{bar}] {completed}/{total} ({percentage}%) - {context_name}")
-    sys.stderr.flush()
 
-    # Add newline when complete
-    if completed == total:
-        sys.stderr.write("\n")
-        sys.stderr.flush()
+def error_indicator(context_name: str, error: str) -> None:
+    """Display an error above the progress bar."""
+    _progress.print_above(f"  ✗ {context_name}: {error}")
 
 
 def validate_output_file(file_path: str) -> None:
@@ -86,7 +113,8 @@ def main() -> None:
             include_patterns=include_patterns,
             exclude_patterns=exclude_patterns,
             timeout=args.timeout,
-            progress_callback=progress_indicator
+            progress_callback=progress_indicator,
+            error_callback=error_indicator
         )
     except KeyboardInterrupt:
         sys.stderr.write("\n\n⚠️  Interrupted. Exiting...\n")
